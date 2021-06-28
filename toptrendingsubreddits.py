@@ -1,17 +1,16 @@
 import requests
 import luigi
-# import tornado.web
-# import tornado.ioloop
-import reddit_oauth as roa
+import schedule
+import time
 
 
 def authorize_api():
     """Authorize the Reddit API"""
 
-    CLIENT_ID = "<CLIENT_ID"
-    SECRET_TOKEN = "<SECRET_TOKEN>"
-    username = "<username>"
-    pwd = "<password>"
+    CLIENT_ID = "oDkt39mpoGzKjQ"
+    SECRET_TOKEN = "PcGeuGZ1ovIfzIDpKi_YLTYK8zjVIw"
+    username = "priya_1292"
+    pwd = "Priya@1292"
 
     # CLIENT_ID and SECRET_TOKEN are used to authorize
     auth = requests.auth.HTTPBasicAuth(CLIENT_ID, SECRET_TOKEN)
@@ -37,6 +36,49 @@ def authorize_api():
     return headers
 
 
+def get_top10_post_list(res):
+    """Get top 10 posts for each subreddits"""
+    i = 0
+    top_subreddits = []
+    titles_list = []
+    for post in res.json()['data']['children']:
+        if i < 10:
+            subreddit_title = post['data']['title']+','
+            titles_list.append(subreddit_title[36:].split(','))
+            i += 1
+        else:
+            break
+    for outer in titles_list:
+        for el in outer:
+            if len(el) != 0:
+                el = el.strip()
+                top_subreddits.append(el)
+    return top_subreddits
+
+
+def get_post_ids(top_subreddits, headers):
+    """Get 5 higher scoring comments for each post"""
+    j = 0
+    top_subreddits_postId = {}
+    for key in top_subreddits:
+        each_post_res = requests.get(
+            "https://oauth.reddit.com"+top_subreddits[j]+'/top', headers=headers)
+        k = 0
+        if 'reason' not in each_post_res.json():
+            posts_title_list = []
+            for post in each_post_res.json()['data']['children']:
+                if k < 10:
+                    posts_title_list.append(post['data']['id'])
+                    k += 1
+                else:
+                    break
+            top_subreddits_postId[key] = posts_title_list
+        else:
+            pass
+        j += 1
+    return top_subreddits_postId
+
+
 class GetSubRedditsPosts(luigi.Task):
     """
     Get list of the top 10 subreddits posts
@@ -48,6 +90,7 @@ class GetSubRedditsPosts(luigi.Task):
     def run(self):
 
         # fetch header after the authorization
+        print("hello world")
         headers = authorize_api()
 
         # Get the top 50 trending subreddits and creating a list
@@ -55,10 +98,10 @@ class GetSubRedditsPosts(luigi.Task):
             "https://oauth.reddit.com/r/trendingsubreddits", headers=headers)
 
         top_subreddits = []
-        top_subreddits = roa.get_top10_post_list(res)
+        top_subreddits = get_top10_post_list(res)
 
         # Get the top 10 posts for each subreddit
-        top_subreddits_postId = roa.get_post_ids(top_subreddits, headers)
+        top_subreddits_postId = get_post_ids(top_subreddits, headers)
 
         # Get top 5 higher scoring comments in descending order for each 10 posts
         # calculating the subreddits scores
@@ -83,7 +126,19 @@ class GetSubRedditsPosts(luigi.Task):
                 scores_sum += every
             subreddits_with_post_scores[subreddits] = round(
                 scores_sum/(1 if len(post_scores) == 0 else len(post_scores)), 3)
+        print(subreddits_with_post_scores)
 
         with self.output().open("w") as f:
             for key in subreddits_with_post_scores.keys():
                 f.write("%s,%s\n" % (key, subreddits_with_post_scores[key]))
+
+obj = GetSubRedditsPosts()
+
+if __name__ == '__main__':
+
+    luigi.build([GetSubRedditsPosts()], local_scheduler=True)
+    schedule.every(12).hours.do(obj.run())
+
+    while 1:
+        schedule.run_pending()
+        time.sleep(1)
