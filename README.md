@@ -3,7 +3,7 @@
 This Project is calculating the Top 50 trending subreddits score and this score is based on the total score of top 10 posts for each subreddits.
 The total score of all the 10 posts is based on the 5 higher scoring comments for each post.
 
-Steps to run the code:
+#Steps to run the code:
 
 1. Clone the repository.
 2. Create an account on Reddit to use its API.
